@@ -1,29 +1,38 @@
 #pragma once
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <omp.h>
 #include <string>
 #include <vector>
 
-template <typename F> auto benchmark(F func, int num_repeats = 8) {
-  std::vector<double> times;
+class benchmark;
+class timer;
 
-  for (int rep_idx = 0; rep_idx < num_repeats; ++rep_idx) {
-    auto start = omp_get_wtime();
-    func();
-    auto end = omp_get_wtime();
-    times.push_back(end - start);
-  }
+class timer {
+public:
+  ~timer();
 
-  double mean = 0.0;
-  for (auto const &t : times)
-    mean += t;
-  mean /= (double)times.size();
+private:
+  friend class benchmark;
+  benchmark *super;
+  explicit timer(benchmark *super);
 
-  double sd = 0.0;
-  for (auto const &t : times)
-    sd += (t - mean) * (t - mean);
-  sd = std::sqrt(sd / (double)(times.size() - 1));
+  using time_point_t = decltype(omp_get_wtime());
+  time_point_t start;
+};
 
-  return std::make_pair(mean, sd);
-}
+class benchmark {
+public:
+  timer measure();
+  void reset();
+
+public:
+  std::vector<double> samples;
+  double mean() const;
+  double sd() const;
+  double quantile(double q) const;
+
+  friend std::ostream &operator<<(std::ostream &os, benchmark const &bench);
+};

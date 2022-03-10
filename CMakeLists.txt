@@ -7,8 +7,7 @@ function(create_omp_target name)
     add_executable(${name})
 
     target_sources(${name}
-        PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/${name}.cpp)
+        PRIVATE ${name}.cpp benchmark.h benchmark.cpp)
 
     target_link_libraries(${name}
         PRIVATE OpenMP::OpenMP_CXX)
