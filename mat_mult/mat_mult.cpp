@@ -1,4 +1,6 @@
-#include "benchmark.h"
+#include <hpc/benchmark.h>
+#include <hpc/cpu_timer.h>
+#include <hpc/omp_timer.h>
 #include <iostream>
 #include <omp.h>
 #include <thread>
@@ -25,9 +27,9 @@ Matrix generateMatrix(int size, bool empty = false) {
 Matrix matrixMult(Matrix first, Matrix second, int size) {
   Matrix result = generateMatrix(size, true);
 
-  auto bench = benchmark();
+  auto bench = hpc::benchmark();
   for (int rep = 0; rep < 16; ++rep) {
-    auto timer = bench.measure();
+    auto timer = bench.measure<hpc::cpu_timer>();
     for (int i = 0; i < size; i++) {
       for (int j = 0; j < size; j++) {
         auto res = 0;
@@ -46,9 +48,9 @@ Matrix matrixMult(Matrix first, Matrix second, int size) {
 Matrix matrixMultParallel(Matrix first, Matrix second, int size) {
   Matrix result = generateMatrix(size, true);
 
-  auto bench = benchmark();
+  auto bench = hpc::benchmark();
   for (int rep = 0; rep < 16; ++rep) {
-    auto timer = bench.measure();
+    auto timer = bench.measure<hpc::omp_timer>();
 #pragma omp parallel for default(none) shared(size, first, second, result)
     for (int i = 0; i < size; i++) {
       for (int j = 0; j < size; j++) {
@@ -78,7 +80,7 @@ int main() {
   std::vector<int> sizes = {128, 192, 256, 340, 512};
   auto max_threads = (int)std::thread::hardware_concurrency();
   std::cout << "num threads = " << max_threads << '\n';
-  
+
   omp_set_num_threads(max_threads);
   srand(time(nullptr));
 

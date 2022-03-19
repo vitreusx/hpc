@@ -1,0 +1,4 @@
+[submodule "base/ext/thrust"]
+	path = base/ext/thrust
+	url = https://github.com/NVIDIA/thrust
+	shallow = true

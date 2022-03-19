@@ -1,0 +1,1 @@
+create_omp_target(mat_mult)

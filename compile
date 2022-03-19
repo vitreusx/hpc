@@ -1,0 +1,16 @@
+#!/usr/bin/bash
+set -e
+
+function for_config () {
+  build_dir="$1"
+  build_type="$2"
+
+  mkdir -p "${build_dir}"
+  cd "${build_dir}"
+  cmake -DCMAKE_BUILD_TYPE="${build_type}" -G Ninja ..
+  ninja all
+  cd ..
+}
+
+for_config debug Debug
+for_config release Release

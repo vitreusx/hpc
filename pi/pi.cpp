@@ -1,4 +1,5 @@
-#include "benchmark.h"
+#include <hpc/benchmark.h>
+#include <hpc/omp_timer.h>
 #include <iomanip>
 #include <iostream>
 #include <omp.h>
@@ -77,7 +78,7 @@ int main() {
   std::vector<int> num_threads = {1, 2, 4, 8, 16, 32, 64};
   std::vector<int> sizes = {100, 1'000, 10'000, 100'000};
 
-  benchmark bench;
+  hpc::benchmark bench;
 
   std::cout << "num_threads,size,seq,par_red,par_crit" << '\n';
   for (auto const &thr : num_threads) {
@@ -88,21 +89,21 @@ int main() {
 
       bench.reset();
       for (int rep = 0; rep < 8; ++rep) {
-        auto timer = bench.measure();
+        auto timer = bench.measure<hpc::omp_timer>();
         seq_res = calcPi(size);
       }
       std::cout << "," << bench.mean();
 
       bench.reset();
       for (int rep = 0; rep < 8; ++rep) {
-        auto timer = bench.measure();
+        auto timer = bench.measure<hpc::omp_timer>();
         par_red_res = calcPiParallelReduction(size);
       }
       std::cout << "," << bench.mean();
 
       bench.reset();
       for (int rep = 0; rep < 8; ++rep) {
-        auto timer = bench.measure();
+        auto timer = bench.measure<hpc::omp_timer>();
         par_crit_res = calcPiParallelCritical(size);
       }
       std::cout << "," << bench.mean();

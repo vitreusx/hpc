@@ -1,11 +1,10 @@
 #include <iostream>
 #include <omp.h>
 
-int main(int argc, char *argv[]) {
-  int threadCount, threadId;
-#pragma omp parallel private(threadCount, threadId)
+int main() {
+#pragma omp parallel default(none) shared(std::cout)
   {
-    threadId = omp_get_thread_num();
+    auto threadId = omp_get_thread_num();
 
 #pragma omp for
     for (int i = 0; i < 10; i++) {
@@ -15,7 +14,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (threadId == 0) {
-      threadCount = omp_get_num_threads();
+      auto threadCount = omp_get_num_threads();
       std::cout << "Number of threads = " << threadCount << std::endl;
     }
   }
