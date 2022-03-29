@@ -1,1 +1,0 @@
-create_omp_target(hello_world)

@@ -7,8 +7,14 @@ add_subdirectory(base)
 function(create_omp_target target)
     add_executable(${target})
 
+    file(GLOB_RECURSE ${target}_HEADERS CONFIGURE_DEPENDS
+        ${target}/*.h ${target}/*.hpp)
+    file(GLOB_RECURSE ${target}_SOURCES CONFIGURE_DEPENDS
+        ${target}/*.cpp)
+
     target_sources(${target}
-        PRIVATE ${target}.cpp)
+        PRIVATE ${${target}_SOURCES}
+        PUBLIC ${${target}_HEADERS})
 
     target_link_libraries(${target}
         PRIVATE base_omp)
@@ -23,15 +29,21 @@ function(create_omp_target target)
         $<$<CONFIG:Release>:-Ofast;-march=native>)
 endfunction()
 
-add_subdirectory(hello_world)
-add_subdirectory(mat_mult)
-add_subdirectory(pi)
+create_omp_target(hello_world)
+create_omp_target(mat_mult)
+create_omp_target(pi)
 
 function(create_cuda_target target)
     add_executable(${target})
 
+    file(GLOB_RECURSE ${target}_HEADERS CONFIGURE_DEPENDS
+        ${target}/*.h ${target}/*.cuh ${target}/*.hpp)
+    file(GLOB_RECURSE ${target}_SOURCES CONFIGURE_DEPENDS
+        ${target}/*.cpp ${target}/*.cu)
+
     target_sources(${target}
-        PRIVATE ${target}.cu)
+        PUBLIC ${${target}_HEADERS}
+        PRIVATE ${${target}_SOURCES})
 
     target_link_libraries(${target}
         PRIVATE base_cuda)
@@ -52,4 +64,5 @@ function(create_cuda_target target)
         CUDA_ARCHITECTURES 70)
 endfunction()
 
-add_subdirectory(stencil)
+create_cuda_target(stencil)
+create_cuda_target(raytracer)

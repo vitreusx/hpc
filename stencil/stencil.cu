@@ -2,14 +2,16 @@
 #include <hpc/config.cuh>
 #include <hpc/cpu_timer.h>
 #include <hpc/cuda_timer.cuh>
-#include <hpc/scoped_timer.h>
+#include <hpc/experiment.h>
 #include <iostream>
 #include <sstream>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/random.h>
 
-template <typename T> void cpu_stencil(T const *in, T *out, int size, int R) {
+template <typename T>
+void cpu_stencil(T const *in, T *out, int size, int R, hpc::experiment &xp) {
+  auto timer = xp.measure<hpc::cpu_timer>("");
   for (int out_idx = 0; out_idx < size; ++out_idx) {
     T res = (T)0;
     for (int in_idx = out_idx - R; in_idx <= out_idx + R; ++in_idx) {
@@ -39,11 +41,30 @@ __host__ __device__ T div_round_up(T const &p, T const &q) {
   return (p + q - 1) / q;
 }
 
+template <typename T, typename F>
+void gpu_wrapper(T const *in, T *out, int size, hpc::experiment &xp, F func) {
+  auto total = xp.measure<hpc::cuda_timer>("total");
+  thrust::device_vector<T> dev_in(size), dev_out(size);
+  thrust::fill(dev_out.begin(), dev_out.end(), (T)0);
+  thrust::copy(in, in + size, dev_in.begin());
+  {
+    auto kernel = xp.measure<hpc::cuda_timer>("kernel");
+    auto *dev_in_ptr = thrust::raw_pointer_cast(dev_in.data());
+    auto *dev_out_ptr = thrust::raw_pointer_cast(dev_out.data());
+    func(dev_in_ptr, dev_out_ptr);
+  }
+  thrust::copy(dev_out.begin(), dev_out.end(), out);
+}
+
 template <typename T>
-void gpu_stencil_v1(T const *in, T *out, int size, int R, int block_size) {
-  dim3 block(block_size);
-  dim3 grid(div_round_up(size, block_size));
-  v1_kernel<T><<<grid, block>>>(in, out, size, R);
+void gpu_stencil_v1(T const *in, T *out, int size, int R, int block_size,
+                    hpc::experiment &xp) {
+  gpu_wrapper<T>(
+      in, out, size, xp, [&](auto *dev_in_ptr, auto *dev_out_ptr) -> void {
+        dim3 block(block_size);
+        dim3 grid(div_round_up(size, block_size));
+        v1_kernel<T><<<grid, block>>>(dev_in_ptr, dev_out_ptr, size, R);
+      });
 }
 
 template <typename T>
@@ -90,11 +111,15 @@ __global__ void v2_kernel(T const *in, T *out, int size, int R) {
 }
 
 template <typename T>
-void gpu_stencil_v2(T const *in, T *out, int size, int R, int block_size) {
-  dim3 block(block_size);
-  dim3 grid(div_round_up(size, block_size));
-  auto sm = block_size * sizeof(T);
-  v2_kernel<<<grid, block, sm>>>(in, out, size, R);
+void gpu_stencil_v2(T const *in, T *out, int size, int R, int block_size,
+                    hpc::experiment &xp) {
+  gpu_wrapper<T>(
+      in, out, size, xp, [&](auto *dev_in_ptr, auto *dev_out_ptr) -> void {
+        dim3 block(block_size);
+        dim3 grid(div_round_up(size, block_size));
+        auto sm = block_size * sizeof(T);
+        v2_kernel<<<grid, block, sm>>>(dev_in_ptr, dev_out_ptr, size, R);
+      });
 }
 
 template <typename T>
@@ -129,11 +154,15 @@ __global__ void v3_kernel(T const *in, T *out, int size, int R) {
 }
 
 template <typename T>
-void gpu_stencil_v3(T const *in, T *out, int size, int R, int block_size) {
-  dim3 block(block_size);
-  dim3 grid(div_round_up(size, block_size));
-  auto sm = block_size * sizeof(T);
-  v3_kernel<<<grid, block, sm>>>(in, out, size, R);
+void gpu_stencil_v3(T const *in, T *out, int size, int R, int block_size,
+                    hpc::experiment &xp) {
+  gpu_wrapper<T>(
+      in, out, size, xp, [&](auto *dev_in_ptr, auto *dev_out_ptr) -> void {
+        dim3 block(block_size);
+        dim3 grid(div_round_up(size, block_size));
+        auto sm = block_size * sizeof(T);
+        v3_kernel<<<grid, block, sm>>>(dev_in_ptr, dev_out_ptr, size, R);
+      });
 }
 
 struct random_source {
@@ -167,84 +196,62 @@ int main() {
   int num_reps = 16;
   auto timeout = 5.0s;
 
-  for (auto size : {1'000, 1'000'000, 64'000'000}) {
-    thrust::host_vector<float> host_in(size), host_out(size),
-        host_dev_out(size);
-    thrust::device_vector<float> dev_in(size), dev_out(size);
+  hpc::experiment::header({"rep", "algo", "size", "R", "block"});
+  for (int rep = 0; rep < num_reps; ++rep) {
+    for (auto size : {1'000, 1'000'000, 64'000'000}) {
+      thrust::host_vector<float> host_in(size), host_out(size),
+          host_dev_out(size);
+      auto *host_in_ptr = thrust::raw_pointer_cast(host_in.data());
+      auto *host_out_ptr = thrust::raw_pointer_cast(host_out.data());
+      auto *host_dev_out_ptr = thrust::raw_pointer_cast(host_dev_out.data());
 
-    thrust::counting_iterator<int> idx_seq;
-    thrust::transform(idx_seq, idx_seq + size, host_in.begin(),
-                      random_source());
+      thrust::counting_iterator<int> idx_seq;
+      thrust::transform(idx_seq, idx_seq + size, host_in.begin(),
+                        random_source());
 
-    auto *host_in_ptr = thrust::raw_pointer_cast(host_in.data());
-    auto *host_out_ptr = thrust::raw_pointer_cast(host_out.data());
-    auto *dev_in_ptr = thrust::raw_pointer_cast(dev_in.data());
-    auto *dev_out_ptr = thrust::raw_pointer_cast(dev_out.data());
+      for (auto R : {3, 30, 300, 3'000}) {
+        bool cpu_completed = false;
 
-    for (auto R : {3, 30, 300, 3'000}) {
-      bool cpu_all_completed = true;
+        {
+          auto xp = hpc::experiment(rep, "cpu", size, R, "");
+          auto fut = std::async([&]() -> void {
+            cpu_stencil(host_in_ptr, host_out_ptr, size, R, xp);
+            cpu_completed = true;
+          });
 
-      for (int rep = 0; rep < num_reps; ++rep) {
-        bool completed = false;
-        double dur;
-
-        auto fut = std::async([&]() -> void {
-          auto timer = hpc::scoped_timer<hpc::cpu_timer>(dur);
-          cpu_stencil(host_in_ptr, host_out_ptr, size, R);
-          completed = true;
-        });
-
-        fut.wait_for(timeout);
-        cpu_all_completed &= completed;
-
-        if (!completed) {
-          std::cerr << "cpu for size=" << size << ", R=" << R << " timed out\n";
-          break;
-        } else {
-          std::cout << rep << "," << size << "," << R << ",cpu," << dur << '\n';
+          fut.wait_for(timeout);
+          if (!cpu_completed)
+            xp.clear();
         }
-      }
 
-      auto run_gpu = [&](std::string const &name, auto kernel) -> void {
-        hpc::cuda_timer full_timer, kernel_timer;
-
-        for (int rep = 0; rep < num_reps; ++rep) {
-          thrust::fill(dev_out.begin(), dev_out.end(), 0.0f);
-
-          full_timer.start();
+        for (auto block_size : {32, 64, 128, 192, 256, 512, 1024}) {
           {
-            thrust::copy(host_in.begin(), host_in.end(), dev_in.begin());
-            kernel_timer.start();
-            { kernel(); }
-            kernel_timer.end();
-            thrust::copy(dev_out.begin(), dev_out.end(), host_dev_out.begin());
+            auto xp = hpc::experiment(rep, "gpu-v1", size, R, block_size);
+            gpu_stencil_v1(host_in_ptr, host_dev_out_ptr, size, R, block_size,
+                           xp);
           }
-          full_timer.end();
-
-          std::cout << rep << "," << size << "," << R << "," << name << "-full,"
-                    << full_timer.dur() << '\n';
-          std::cout << rep << "," << size << "," << R << "," << name
-                    << "-kernel," << kernel_timer.dur() << '\n';
-
-          if (cpu_all_completed) {
+          if (cpu_completed)
             allclose(host_out, host_dev_out);
-          }
-        }
-      };
 
-      for (auto block_size : {32, 64, 128, 192, 256, 512, 1024}) {
-        auto bs = std::to_string(block_size);
-        run_gpu("gpu-v1-" + bs, [&]() -> void {
-          gpu_stencil_v1(dev_in_ptr, dev_out_ptr, size, R, block_size);
-        });
-        run_gpu("gpu-v2-" + bs, [&]() -> void {
-          gpu_stencil_v2(dev_in_ptr, dev_out_ptr, size, R, block_size);
-        });
-        run_gpu("gpu-v3-" + bs, [&]() -> void {
-          gpu_stencil_v3(dev_in_ptr, dev_out_ptr, size, R, block_size);
-        });
+          {
+            auto xp = hpc::experiment(rep, "gpu-v2", size, R, block_size);
+            gpu_stencil_v2(host_in_ptr, host_dev_out_ptr, size, R, block_size,
+                           xp);
+          }
+          if (cpu_completed)
+            allclose(host_out, host_dev_out);
+
+          {
+            auto xp = hpc::experiment(rep, "gpu-v3", size, R, block_size);
+            gpu_stencil_v3(host_in_ptr, host_dev_out_ptr, size, R, block_size,
+                           xp);
+          }
+          if (cpu_completed)
+            allclose(host_out, host_dev_out);
+        }
       }
     }
   }
+
   return EXIT_SUCCESS;
 }

@@ -1,11 +1,11 @@
-#include <hpc/benchmark.h>
 #include <hpc/cpu_timer.h>
+#include <hpc/experiment.h>
 #include <hpc/omp_timer.h>
 #include <iostream>
 #include <omp.h>
+#include <sstream>
 #include <thread>
-
-#define SIZE 500
+#include <vector>
 
 using Row = int *;
 using Matrix = Row *;
@@ -24,12 +24,11 @@ Matrix generateMatrix(int size, bool empty = false) {
   return result;
 }
 
-Matrix matrixMult(Matrix first, Matrix second, int size) {
+Matrix matrixMult(Matrix first, Matrix second, int size, hpc::experiment &xp) {
   Matrix result = generateMatrix(size, true);
 
-  auto bench = hpc::benchmark();
-  for (int rep = 0; rep < 16; ++rep) {
-    auto timer = bench.measure<hpc::cpu_timer>();
+  {
+    auto timer = xp.measure<hpc::cpu_timer>("");
     for (int i = 0; i < size; i++) {
       for (int j = 0; j < size; j++) {
         auto res = 0;
@@ -41,16 +40,15 @@ Matrix matrixMult(Matrix first, Matrix second, int size) {
     }
   }
 
-  std::cout << "[seq] " << bench << '\n';
   return result;
 }
 
-Matrix matrixMultParallel(Matrix first, Matrix second, int size) {
+Matrix matrixMultParallel(Matrix first, Matrix second, int size,
+                          hpc::experiment &xp) {
   Matrix result = generateMatrix(size, true);
 
-  auto bench = hpc::benchmark();
-  for (int rep = 0; rep < 16; ++rep) {
-    auto timer = bench.measure<hpc::omp_timer>();
+  {
+    auto timer = xp.measure<hpc::omp_timer>("");
 #pragma omp parallel for default(none) shared(size, first, second, result)
     for (int i = 0; i < size; i++) {
       for (int j = 0; j < size; j++) {
@@ -63,7 +61,6 @@ Matrix matrixMultParallel(Matrix first, Matrix second, int size) {
     }
   }
 
-  std::cout << "[par] " << bench << '\n';
   return result;
 }
 
@@ -79,18 +76,26 @@ void check(Matrix first, Matrix second, int size) {
 int main() {
   std::vector<int> sizes = {128, 192, 256, 340, 512};
   auto max_threads = (int)std::thread::hardware_concurrency();
-  std::cout << "num threads = " << max_threads << '\n';
+  std::clog << "num threads = " << max_threads << '\n';
 
   omp_set_num_threads(max_threads);
   srand(time(nullptr));
 
-  for (auto const &size : sizes) {
-    std::cout << "size = " << size << '\n';
-    auto first = generateMatrix(size);
-    auto second = generateMatrix(size);
-    auto sequentialResult = matrixMult(first, second, size);
-    auto parallelResult = matrixMultParallel(first, second, size);
-    check(sequentialResult, parallelResult, size);
+  hpc::experiment::header({"rep", "algo", "size"});
+  for (int rep = 0; rep < 16; ++rep) {
+    for (auto const &size : sizes) {
+      auto first = generateMatrix(size);
+      auto second = generateMatrix(size);
+
+      auto seq_xp = hpc::experiment(rep, "seq", size);
+      auto seq_res = matrixMult(first, second, size, seq_xp);
+
+      auto par_xp = hpc::experiment(rep, "par", size);
+      auto par_res = matrixMultParallel(first, second, size, par_xp);
+
+      check(seq_res, par_res, size);
+    }
   }
+
   return 0;
 }

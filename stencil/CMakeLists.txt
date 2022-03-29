@@ -1,1 +1,0 @@
-create_cuda_target(stencil)

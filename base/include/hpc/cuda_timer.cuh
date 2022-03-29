@@ -2,7 +2,7 @@
 #include "timer.h"
 
 namespace hpc {
-class cuda_timer: public timer {
+class cuda_timer : public timer {
 public:
   cuda_timer();
   ~cuda_timer();
