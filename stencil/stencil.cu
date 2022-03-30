@@ -193,8 +193,7 @@ void allclose(thrust::host_vector<float> const &A,
 
 int main() {
   using namespace std::chrono_literals;
-  int num_reps = 16;
-  auto timeout = 5.0s;
+  int num_reps = 8;
 
   hpc::experiment::header({"rep", "algo", "size", "R", "block"});
   for (int rep = 0; rep < num_reps; ++rep) {
@@ -212,16 +211,10 @@ int main() {
       for (auto R : {3, 30, 300, 3'000}) {
         bool cpu_completed = false;
 
-        {
+        if ((double)size * (double)R < 1.0e6) {
           auto xp = hpc::experiment(rep, "cpu", size, R, "");
-          auto fut = std::async([&]() -> void {
-            cpu_stencil(host_in_ptr, host_out_ptr, size, R, xp);
-            cpu_completed = true;
-          });
-
-          fut.wait_for(timeout);
-          if (!cpu_completed)
-            xp.clear();
+          cpu_stencil(host_in_ptr, host_out_ptr, size, R, xp);
+          cpu_completed = true;
         }
 
         for (auto block_size : {32, 64, 128, 192, 256, 512, 1024}) {
