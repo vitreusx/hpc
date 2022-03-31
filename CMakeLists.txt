@@ -66,3 +66,4 @@ endfunction()
 
 create_cuda_target(stencil)
 create_cuda_target(raytracer)
+create_cuda_target(streams)
