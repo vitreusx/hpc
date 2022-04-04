@@ -1,4 +1,4 @@
 #!/usr/bin/bash
 rsync -cau \
-  --exclude={'debug','release'} \
+  --exclude-from='exclude' \
   . hpc:~/hpc

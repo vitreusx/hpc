@@ -1,7 +1,7 @@
 #pragma once
 #include "base.cuh"
 
-__global__ void stock_kernel(sphere const *spheres, int num_spheres,
+__global__ void stock_kernel(sphere *spheres, int num_spheres,
                              bitmap_view bitmap) {
   int x = threadIdx.x + blockDim.x * blockIdx.x;
   int y = threadIdx.y + blockDim.y * blockIdx.y;

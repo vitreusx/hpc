@@ -1,11 +1,14 @@
 #pragma once
+#include "stream.cuh"
 #include "timer.h"
+#include <memory>
 
 namespace hpc {
 class cuda_timer : public timer {
 public:
-  explicit cuda_timer(cudaStream_t stream = nullptr);
-  ~cuda_timer();
+  explicit cuda_timer();
+  explicit cuda_timer(std::shared_ptr<stream> timer_stream);
+  ~cuda_timer() override;
 
 public:
   void start() override;
@@ -13,7 +16,7 @@ public:
   double dur() const override;
 
 private:
-  cudaStream_t stream;
+  std::shared_ptr<stream> timer_stream;
   cudaEvent_t start_t, end_t;
 };
 } // namespace hpc

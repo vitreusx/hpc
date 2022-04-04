@@ -14,7 +14,7 @@ int main() {
                               dim3(32, 32)};
 
   hpc::experiment::header({"rep", "algo", "x", "y"});
-  for (int rep = 0; rep < 16; ++rep) {
+  for (int rep = 0; rep < 64; ++rep) {
     thrust::counting_iterator<int> idx_seq;
     thrust::transform(idx_seq, idx_seq + cpu_spheres.size(),
                       cpu_spheres.begin(), random_sphere_source(cpu_bm));
