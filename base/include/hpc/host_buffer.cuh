@@ -14,6 +14,12 @@ template <typename T> struct host_iter {
 
   operator T *() const { return ptr; }
 
+  host_iter<T> operator++() { return host_iter(++ptr); }
+
+  host_iter<T> operator++(int) { return host_iter(ptr++); }
+
+  bool operator!=(host_iter<T> const &other) { return ptr != other.ptr; }
+
   host_iter<T> operator+(int offset) const {
     return host_iter<T>(ptr + offset);
   }
@@ -23,18 +29,37 @@ template <typename T> struct host_iter {
 
 template <typename T> class host_buffer {
 public:
+  host_buffer() : host_buffer(0) {}
+
   explicit host_buffer(int size) {
-    cudaCheck(cudaMallocHost((void **)&ptr, size * sizeof(T)));
+    if (size > 0)
+      cudaCheck(cudaMallocHost((void **)&ptr, size * sizeof(T)));
+    else
+      ptr = nullptr;
     size_ = size;
   }
 
-  host_buffer(host_buffer const &other) = delete;
-  host_buffer(host_buffer &&other) = delete;
+  host_buffer(host_buffer const &) = delete;
+  host_buffer &operator=(host_buffer const &) = delete;
+
+  host_buffer(host_buffer &&other) {
+    ptr = other.ptr;
+    size_ = other.size_;
+    other.reset();
+  }
+
+  host_buffer &operator=(host_buffer &&other) {
+    this->~host_buffer();
+    ptr = other.ptr;
+    size_ = other.size_;
+    other.reset();
+    return *this;
+  }
 
   ~host_buffer() {
-    cudaCheck(cudaFreeHost(ptr));
-    ptr = nullptr;
-    size_ = 0;
+    if (ptr)
+      cudaCheck(cudaFreeHost(ptr));
+    reset();
   }
 
   int size() const { return size_; }
@@ -60,5 +85,10 @@ public:
 private:
   T *ptr;
   int size_;
+
+  void reset() {
+    ptr = nullptr;
+    size_ = 0;
+  }
 };
 } // namespace hpc

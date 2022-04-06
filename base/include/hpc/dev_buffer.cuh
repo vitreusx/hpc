@@ -14,6 +14,12 @@ template <typename T> struct dev_iter {
 
   operator T *() const { return ptr; }
 
+  dev_iter<T> operator++() { return dev_iter(++ptr); }
+
+  dev_iter<T> operator++(int) { return dev_iter(ptr++); }
+
+  bool operator!=(dev_iter<T> const &other) { return ptr != other.ptr; }
+
   dev_iter<T> operator+(int offset) const { return dev_iter<T>(ptr + offset); }
 
   T *ptr;
@@ -21,18 +27,37 @@ template <typename T> struct dev_iter {
 
 template <typename T> class dev_buffer {
 public:
+  dev_buffer() : dev_buffer(0) {}
+
   explicit dev_buffer(int size) {
-    cudaCheck(cudaMalloc((void **)&ptr, size * sizeof(T)));
+    if (size > 0)
+      cudaCheck(cudaMalloc((void **)&ptr, size * sizeof(T)));
+    else
+      ptr = nullptr;
     size_ = size;
   }
 
-  dev_buffer(dev_buffer const &other) = delete;
-  dev_buffer(dev_buffer &&other) = delete;
+  dev_buffer(dev_buffer const &) = delete;
+  dev_buffer &operator=(dev_buffer const &) = delete;
+
+  dev_buffer(dev_buffer &&other) {
+    ptr = other.ptr;
+    size_ = other.size_;
+    other.reset();
+  }
+
+  dev_buffer &operator=(dev_buffer &&other) {
+    this->~dev_buffer();
+    ptr = other.ptr;
+    size_ = other.size_;
+    other.reset();
+    return *this;
+  }
 
   ~dev_buffer() {
-    cudaCheck(cudaFree(ptr));
-    ptr = nullptr;
-    size_ = 0;
+    if (ptr)
+      cudaCheck(cudaFree(ptr));
+    reset();
   }
 
   int size() const { return size_; }
@@ -58,5 +83,10 @@ public:
 private:
   T *ptr;
   int size_;
+
+  void reset() {
+    ptr = nullptr;
+    size_ = 0;
+  }
 };
 } // namespace hpc

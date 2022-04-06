@@ -6,11 +6,13 @@ namespace hpc {
 template <typename U>
 inline void copy_(U const *first, U const *last, U *dest, cudaMemcpyKind kind,
                   cudaStream_t stream) {
-  if (stream != nullptr) {
-    cudaCheck(
-        cudaMemcpyAsync(dest, first, (last - first) * sizeof(U), kind, stream));
-  } else {
-    cudaCheck(cudaMemcpy(dest, first, (last - first) * sizeof(U), kind));
+  if (last != first) {
+    if (stream != nullptr) {
+      cudaCheck(cudaMemcpyAsync(dest, first, (last - first) * sizeof(U), kind,
+                                stream));
+    } else {
+      cudaCheck(cudaMemcpy(dest, first, (last - first) * sizeof(U), kind));
+    }
   }
 }
 

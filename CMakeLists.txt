@@ -34,12 +34,16 @@ create_omp_target(mat_mult)
 create_omp_target(pi)
 
 function(create_cuda_target target)
+    create_cuda_target_v2("${target}" "${target}")
+endfunction()
+
+function(create_cuda_target_v2 location target)
     add_executable(${target})
 
     file(GLOB_RECURSE ${target}_HEADERS CONFIGURE_DEPENDS
-        ${target}/*.h ${target}/*.cuh ${target}/*.hpp)
+        ${location}/*.h ${location}/*.cuh ${location}/*.hpp)
     file(GLOB_RECURSE ${target}_SOURCES CONFIGURE_DEPENDS
-        ${target}/*.cpp ${target}/*.cu)
+        ${location}/*.cpp ${location}/*.cu)
 
     target_sources(${target}
         PUBLIC ${${target}_HEADERS}
@@ -67,3 +71,5 @@ endfunction()
 create_cuda_target(stencil)
 create_cuda_target(raytracer)
 create_cuda_target(streams)
+create_cuda_target_v2(brandes/code brandes)
+create_cuda_target(reverseArray)
