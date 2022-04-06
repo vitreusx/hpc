@@ -1,3 +1,4 @@
+#include "edge.cuh"
 #include "graph.h"
 #include "stock.h"
 #include "vertex.cuh"
@@ -27,8 +28,8 @@ int main(int argc, char **argv) {
   auto g = graph::from_stream(input_file);
 
   //  auto res = stock_impl(g);
-  auto res = vertex::impl(g);
-  //  auto res = vertex::cpu_ver(g);
+  //  auto res = vertex::impl(g);
+  auto res = edge::impl(g);
 
   for (int v = 0; v < g.n; ++v)
     *out_stream << res.bc[v] << '\n';

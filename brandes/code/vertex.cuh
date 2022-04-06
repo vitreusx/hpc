@@ -3,8 +3,6 @@
 #include <hpc/cuda_timer.cuh>
 #include <hpc/dev_var.cuh>
 #include <hpc/scoped_timer.h>
-#include <queue>
-#include <stack>
 
 namespace vertex {
 __global__ void setup_bc(int n, float *bc) {
@@ -139,78 +137,6 @@ result impl(graph const &g) {
   res.bc = std::move(host_bc);
   res.total_ms = std::floor(total_dur);
   res.kernel_ms = std::floor(kernel_dur);
-  return res;
-}
-
-result cpu_ver(graph const &g) {
-  result res;
-
-  int ell;
-  bool cont;
-  hpc::host_buffer<int> d(g.n);
-  hpc::host_buffer<int> P(g.m);
-  hpc::host_buffer<float> sigma(g.n), delta(g.n);
-  cpu_csr_repr csr(g);
-
-  res.bc = hpc::host_buffer<float>(g.n);
-  std::fill(res.bc.begin(), res.bc.end(), 0.0f);
-
-  for (int s = 0; s < g.n; ++s) {
-    std::fill(P.begin(), P.end(), 0);
-    std::fill(sigma.begin(), sigma.end(), 0.0f);
-    std::fill(d.begin(), d.end(), -1);
-
-    sigma[s] = 1.0f;
-    d[s] = 0;
-
-    ell = 0;
-    cont = true;
-    while (cont) {
-      cont = false;
-      for (int u = 0; u < g.n; ++u) {
-        if (d[u] != ell)
-          continue;
-
-        for (auto v_off = csr.offs[u]; v_off < csr.offs[u + 1]; ++v_off) {
-          auto v = csr.adjs[v_off];
-
-          if (d[v] < 0) {
-            d[v] = ell + 1;
-            cont = true;
-          }
-          if (d[v] == ell + 1) {
-            sigma[v] += sigma[u];
-            P[v_off] = 1;
-          }
-        }
-      }
-      ell += 1;
-    }
-
-    for (int v = 0; v < g.n; ++v)
-      if (d[v] >= 0)
-        delta[v] = 1.0f / sigma[v];
-
-    while (ell > 1) {
-      ell -= 1;
-      for (int u = 0; u < g.n; ++u) {
-        if (d[u] != ell)
-          continue;
-
-        for (int v_off = csr.offs[u]; v_off < csr.offs[u + 1]; ++v_off) {
-          if (P[v_off]) {
-            auto v = csr.adjs[v_off];
-            delta[u] += delta[v];
-          }
-        }
-      }
-    }
-
-    for (int v = 0; v < g.n; ++v)
-      if (d[v] >= 0 && v != s)
-        res.bc[v] += (delta[v] * sigma[v] - 1.0f);
-  }
-
   return res;
 }
 } // namespace vertex

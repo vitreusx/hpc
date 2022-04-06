@@ -9,9 +9,9 @@ struct cpu_coo_repr {
     is = std::vector<int>(m);
     adjs = std::vector<int>(m);
 
-    for (int e_idx = 0; e_idx < g.edges.size(); ++e_idx) {
-      is[e_idx] = g.edges[e_idx].first;
-      adjs[e_idx] = g.edges[e_idx].second;
+    for (int e = 0; e < m; ++e) {
+      is[e] = g.edges[e].first;
+      adjs[e] = g.edges[e].second;
     }
   }
 
