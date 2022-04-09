@@ -43,8 +43,8 @@ result stock_impl(graph const &g) {
         auto v = Q.front();
         Q.pop();
         S.push(v);
-        for (auto w_off = csr.offs[v]; w_off < csr.offs[v + 1]; ++w_off) {
-          auto w = csr.adjs[w_off];
+        for (auto wptr = csr.ptrs[v]; wptr < csr.ptrs[v + 1]; ++wptr) {
+          auto w = csr.adjs[wptr];
           if (d[w] < 0) {
             Q.push(w);
             d[w] = d[v] + 1;

@@ -1,11 +1,7 @@
 #pragma once
-#include "dev_coo.cuh"
-#include <hpc/cuda_timer.cuh>
-#include <hpc/dev_var.cuh>
-#include <hpc/math.h>
-#include <hpc/scoped_timer.h>
+#include "dev_virt_csr.cuh"
 
-namespace edge {
+namespace virt {
 __global__ void setup_bc(int n, float *bc) {
   int v = threadIdx.x + blockIdx.x * blockDim.x;
   if (v < n)
@@ -25,28 +21,22 @@ __global__ void setup_vert_props(int n, int s, float *sigma, int *d) {
   }
 }
 
-__global__ void setup_edge_props(int m, int *P) {
-  int e = threadIdx.x + blockIdx.x * blockDim.x;
-  if (e < m)
-    P[e] = 0;
-}
-
-__global__ void forward_step(int ell, int m, int *d, int *is, int *adjs, int *P,
-                             float *sigma, bool *cont) {
-  int e = threadIdx.x + blockIdx.x * blockDim.x;
-  if (e < m) {
-    int u = is[e];
+__global__ void forward_step(int ell, int vn, int *d, int *vmap, int *vptrs,
+                             int *adjs, float *sigma, bool *cont) {
+  int virt_u = threadIdx.x + blockIdx.x * blockDim.x;
+  if (virt_u < vn) {
+    int u = vmap[virt_u];
     if (d[u] == ell) {
-      int v = adjs[e];
+      for (auto v_ptr = vptrs[virt_u]; v_ptr < vptrs[virt_u + 1]; ++v_ptr) {
+        auto v = adjs[v_ptr];
 
-      if (d[v] < 0) {
-        d[v] = ell + 1;
-        *cont = true;
-      }
+        if (d[v] < 0) {
+          d[v] = ell + 1;
+          *cont = true;
+        }
 
-      if (d[v] == ell + 1) {
-        atomicAdd(&sigma[v], sigma[u]);
-        P[e] = 1;
+        if (d[v] == ell + 1)
+          atomicAdd(&sigma[v], sigma[u]);
       }
     }
   }
@@ -58,14 +48,19 @@ __global__ void set_delta(int n, int *d, float *sigma, float *delta) {
     delta[v] = 1.0f / sigma[v];
 }
 
-__global__ void backward_step(int ell, int m, int *d, int *is, int *adjs,
-                              int *P, float *delta) {
-  int e = threadIdx.x + blockDim.x * blockIdx.x;
-  if (e < m && P[e]) {
-    int u = is[e];
+__global__ void backward_step(int ell, int vn, int *d, int *vmap, int *vptrs,
+                              int *adjs, float *delta) {
+  int virt_u = threadIdx.x + blockDim.x * blockIdx.x;
+  if (virt_u < vn) {
+    int u = vmap[virt_u];
     if (d[u] == ell) {
-      int v = adjs[e];
-      atomicAdd(&delta[u], delta[v]);
+      float sum = 0.0f;
+      for (auto v_ptr = vptrs[virt_u]; v_ptr < vptrs[virt_u + 1]; ++v_ptr) {
+        auto v = adjs[v_ptr];
+        if (d[v] == ell + 1)
+          sum += delta[v];
+      }
+      atomicAdd(&delta[u], sum);
     }
   }
 }
@@ -82,7 +77,7 @@ struct result {
   int total_ms, kernel_ms;
 };
 
-result impl(graph const &g) {
+result impl(graph const &g, int mdeg = 4) {
   double total_dur, kernel_dur;
   hpc::host_buffer<float> host_bc;
 
@@ -93,13 +88,13 @@ result impl(graph const &g) {
 
     int ell;
     hpc::dev_var<bool> cont(true);
-    hpc::dev_buffer<int> d(g.n), P(g.m);
+    hpc::dev_buffer<int> d(g.n);
     hpc::dev_buffer<float> sigma(g.n), delta(g.n), dev_bc(g.n);
-    dev_coo_repr coo(g);
+    dev_virt_csr_repr virt_csr(g, mdeg);
 
     dim3 block = 256;
     dim3 grid_n = hpc::div_round_up(g.n, block.x);
-    dim3 grid_m = hpc::div_round_up(g.m, block.x);
+    dim3 grid_vn = hpc::div_round_up(virt_csr.vn, block.x);
 
     {
       auto kernel = hpc::scoped_timer<hpc::cuda_timer>(kernel_dur);
@@ -109,13 +104,13 @@ result impl(graph const &g) {
       for (int s = 0; s < g.n; ++s) {
         ell = 0;
         setup_vert_props<<<grid_n, block>>>(g.n, s, sigma, d);
-        setup_edge_props<<<grid_m, block>>>(g.m, P);
 
         cont = true;
         while (cont) {
           cont = false;
-          forward_step<<<grid_m, block>>>(ell, g.m, d, coo.is, coo.adjs, P,
-                                          sigma, cont.get());
+          forward_step<<<grid_vn, block>>>(ell, virt_csr.vn, d, virt_csr.vmap,
+                                           virt_csr.vptrs, virt_csr.adjs, sigma,
+                                           cont.get());
           ell += 1;
         }
 
@@ -123,8 +118,9 @@ result impl(graph const &g) {
 
         while (ell > 1) {
           ell -= 1;
-          backward_step<<<grid_m, block>>>(ell, g.m, d, coo.is, coo.adjs, P,
-                                           delta);
+          backward_step<<<grid_vn, block>>>(ell, virt_csr.vn, d, virt_csr.vmap,
+                                            virt_csr.vptrs, virt_csr.adjs,
+                                            delta);
         }
 
         update_bc_values<<<grid_n, block>>>(g.n, s, dev_bc, delta, sigma, d);
@@ -140,4 +136,4 @@ result impl(graph const &g) {
   res.kernel_ms = std::floor(kernel_dur);
   return res;
 }
-} // namespace edge
+} // namespace virt

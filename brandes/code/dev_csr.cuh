@@ -3,7 +3,7 @@
 #include <hpc/copy.cuh>
 #include <hpc/dev_buffer.cuh>
 #include <hpc/host_buffer.cuh>
-#include <hpc/math.cuh>
+#include <hpc/math.h>
 
 struct dev_csr_repr {
   explicit dev_csr_repr(graph const &g) {
@@ -11,10 +11,10 @@ struct dev_csr_repr {
     n = cpu_csr.n;
     m = cpu_csr.m;
 
-    int num_offs = cpu_csr.offs.size();
-    offs = hpc::dev_buffer<int>(num_offs);
-    hpc::copy<int>(hpc::host_iter<int>(cpu_csr.offs.data()),
-                   cpu_csr.offs.data() + num_offs, offs);
+    int num_ptrs = cpu_csr.ptrs.size();
+    ptrs = hpc::dev_buffer<int>(num_ptrs);
+    hpc::copy<int>(hpc::host_iter<int>(cpu_csr.ptrs.data()),
+                   cpu_csr.ptrs.data() + num_ptrs, ptrs);
 
     int num_adjs = cpu_csr.adjs.size();
     adjs = hpc::dev_buffer<int>(num_adjs);
@@ -23,5 +23,5 @@ struct dev_csr_repr {
   }
 
   int n, m;
-  hpc::dev_buffer<int> offs, adjs;
+  hpc::dev_buffer<int> ptrs, adjs;
 };

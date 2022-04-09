@@ -2,6 +2,7 @@
 #include "graph.h"
 #include "stock.h"
 #include "vertex.cuh"
+#include "virtual.cuh"
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -29,7 +30,8 @@ int main(int argc, char **argv) {
 
   //  auto res = stock_impl(g);
   //  auto res = vertex::impl(g);
-  auto res = edge::impl(g);
+  //  auto res = edge::impl(g);
+  auto res = virt::impl(g);
 
   for (int v = 0; v < g.n; ++v)
     *out_stream << res.bc[v] << '\n';

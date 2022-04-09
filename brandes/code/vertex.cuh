@@ -30,12 +30,12 @@ __global__ void setup_edge_props(int m, int *P) {
     P[e] = 0;
 }
 
-__global__ void forward_step(int ell, int n, int *d, int *offs, int *adjs,
+__global__ void forward_step(int ell, int n, int *d, int *ptrs, int *adjs,
                              int *P, float *sigma, bool *cont) {
   int u = threadIdx.x + blockIdx.x * blockDim.x;
   if (u < n && d[u] == ell) {
-    for (auto v_off = offs[u]; v_off < offs[u + 1]; ++v_off) {
-      auto v = adjs[v_off];
+    for (auto vptr = ptrs[u]; vptr < ptrs[u + 1]; ++vptr) {
+      auto v = adjs[vptr];
 
       if (d[v] < 0) {
         d[v] = ell + 1;
@@ -44,7 +44,7 @@ __global__ void forward_step(int ell, int n, int *d, int *offs, int *adjs,
 
       if (d[v] == ell + 1) {
         atomicAdd(&sigma[v], sigma[u]);
-        P[v_off] = 1;
+        P[vptr] = 1;
       }
     }
   }
@@ -56,13 +56,13 @@ __global__ void set_delta(int n, int *d, float *sigma, float *delta) {
     delta[v] = 1.0f / sigma[v];
 }
 
-__global__ void backward_step(int ell, int n, int *d, int *offs, int *adjs,
+__global__ void backward_step(int ell, int n, int *d, int *ptrs, int *adjs,
                               int *P, float *delta) {
   int u = threadIdx.x + blockDim.x * blockIdx.x;
   if (u < n && d[u] == ell) {
-    for (auto v_off = offs[u]; v_off < offs[u + 1]; ++v_off) {
-      if (P[v_off]) {
-        auto v = adjs[v_off];
+    for (auto vptr = ptrs[u]; vptr < ptrs[u + 1]; ++vptr) {
+      if (P[vptr]) {
+        auto v = adjs[vptr];
         delta[u] += delta[v];
       }
     }
@@ -113,7 +113,7 @@ result impl(graph const &g) {
         cont = true;
         while (cont) {
           cont = false;
-          forward_step<<<grid_n, block>>>(ell, g.n, d, csr.offs, csr.adjs, P,
+          forward_step<<<grid_n, block>>>(ell, g.n, d, csr.ptrs, csr.adjs, P,
                                           sigma, cont.get());
           ell += 1;
         }
@@ -122,7 +122,7 @@ result impl(graph const &g) {
 
         while (ell > 1) {
           ell -= 1;
-          backward_step<<<grid_n, block>>>(ell, g.n, d, csr.offs, csr.adjs, P,
+          backward_step<<<grid_n, block>>>(ell, g.n, d, csr.ptrs, csr.adjs, P,
                                            delta);
         }
 

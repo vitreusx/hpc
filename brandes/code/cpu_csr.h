@@ -6,29 +6,27 @@ struct cpu_csr_repr {
     n = g.n;
     m = g.m;
 
-    offs = std::vector<int>(n + 1);
-    adjs = std::vector<int>(m);
+    ptrs = std::vector<int>(n + 1);
 
-    std::vector<int> deg(n, 0);
-    for (auto const &e : g.edges) {
+    auto deg = std::vector<int>(n, 0);
+    for (auto const &e : g.edges)
       ++deg[e.first];
-    }
 
     auto cur = 0;
-    for (int v = 0; v <= n; ++v) {
-      offs[v] = cur;
-      if (v < n)
-        cur += deg[v];
+    for (int v = 0; v < n; ++v) {
+      ptrs[v] = cur;
+      cur += deg[v];
     }
+    ptrs[n] = cur;
 
-    for (auto const &e : g.edges) {
-      adjs[offs[e.first]++] = e.second;
-    }
+    adjs = std::vector<int>(m);
+    for (auto const &e : g.edges)
+      adjs[ptrs[e.first]++] = e.second;
 
     for (int v = 0; v < n; ++v)
-      offs[v] -= deg[v];
+      ptrs[v] -= deg[v];
   }
 
   int n, m;
-  std::vector<int> offs, adjs;
+  std::vector<int> ptrs, adjs;
 };
