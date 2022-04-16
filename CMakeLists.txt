@@ -73,3 +73,32 @@ create_cuda_target(raytracer)
 create_cuda_target(streams)
 create_cuda_target_v2(brandes/code brandes)
 create_cuda_target(reverseArray)
+
+find_package(MPI)
+
+function(create_mpi_target target)
+    add_executable(${target})
+
+    file(GLOB_RECURSE ${target}_HEADERS CONFIGURE_DEPENDS
+        ${target}/*.h ${target}/*.hpp)
+    file(GLOB_RECURSE ${target}_SOURCES CONFIGURE_DEPENDS
+        ${target}/*.cpp)
+
+    target_sources(${target}
+        PRIVATE ${${target}_SOURCES}
+        PUBLIC ${${target}_HEADERS})
+
+    target_link_libraries(${target}
+        PRIVATE base_omp MPI::MPI_CXX)
+
+    target_compile_features(${target}
+        PRIVATE cxx_std_14)
+
+    target_compile_options(${target}
+        PRIVATE
+        -Wall;-Wextra
+        $<$<CONFIG:Debug>:-g>
+        $<$<CONFIG:Release>:-Ofast;-march=native>)
+endfunction()
+
+#create_mpi_target(mpi_intro)

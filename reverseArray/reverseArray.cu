@@ -14,11 +14,12 @@ static void HandleError(cudaError_t error, const char *file, int line) {
 #define HANDLE_ERROR(err) (HandleError(err, __FILE__, __LINE__))
 
 __global__ void reverseArray(int *inArray, int *outArray) {
-  int inOffset = blockDim.x * blockIdx.x;
-  int outOffset = blockDim.x * (gridDim.x - 1 - blockIdx.x);
-  int inIndex = inOffset + blockIdx.x;
-  int outIndex = outOffset + (blockDim.x - 1 - blockIdx.x);
-  outArray[outIndex] = inArray[inIndex];
+  int in_start = blockDim.x * blockIdx.x;
+  int out_start = blockDim.x * (gridDim.x - 1 - blockIdx.x);
+  int in_off = threadIdx.x;
+  int out_off = blockDim.x - 1 - threadIdx.x;
+
+  outArray[out_start + out_off] = inArray[in_start + in_off];
 }
 
 int main(void) {

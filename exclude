@@ -4,3 +4,5 @@ release
 *.html
 *.csv
 *.pdf
+reverseArray
+mpi_intro

@@ -1,6 +1,7 @@
 #include "edge.cuh"
 #include "graph.h"
 #include "stock.h"
+#include "stride.cuh"
 #include "vertex.cuh"
 #include "virtual.cuh"
 #include <fstream>
@@ -31,7 +32,8 @@ int main(int argc, char **argv) {
   //  auto res = stock_impl(g);
   //  auto res = vertex::impl(g);
   //  auto res = edge::impl(g);
-  auto res = virt::impl(g);
+  //  auto res = virt::impl(g);
+  auto res = stride::impl(g);
 
   for (int v = 0; v < g.n; ++v)
     *out_stream << res.bc[v] << '\n';
